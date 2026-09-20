@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LiveSync — Panel del Productor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #101119;
+    --panel: #191b26;
+    --panel-2: #20222f;
+    --border: #2b2e3d;
+    --text: #eef0f5;
+    --muted: #8b90a3;
+    --live: #ff4d5e;
+    --tiktok: #35e0c9;
+    --instagram: #f0729a;
+    --website: #f4b942;
+    --ok: #3ddc84;
+    --warn: #f4b942;
+    --danger: #ff4d5e;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --radius: 10px;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #f3f4f8;
+    --panel: #ffffff;
+    --panel-2: #f7f8fb;
+    --border: #e0e2ea;
+    --text: #14151f;
+    --muted: #6b7086;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app { max-width: 1240px; margin: 0 auto; padding: 20px 20px 60px; }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 18px;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .live-badge {
+    display: flex; align-items: center; gap: 7px;
+    background: rgba(255,77,94,0.12);
+    color: var(--live);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 13px;
+    padding: 6px 11px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--live);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,77,94,0.5); }
+    50% { opacity: 0.55; box-shadow: 0 0 0 5px rgba(255,77,94,0); }
+  }
+  .session-name { font-family: var(--font-display); font-weight: 600; font-size: 17px; }
+  .session-timer {
+    font-family: var(--font-mono); color: var(--muted); font-size: 14px;
+  }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .theme-toggle {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 13px;
+  }
+  .stop-btn {
+    background: var(--danger); color: #1a0507; border: none;
+    font-family: var(--font-display); font-weight: 700; font-size: 13px;
+    padding: 10px 16px; border-radius: 8px; cursor: pointer;
+    transition: filter 0.15s;
+  }
+  .stop-btn:hover { filter: brightness(1.08); }
+  .stop-btn.stopped { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
+
+  .banner {
+    display: none;
+    background: rgba(255,77,94,0.1); border: 1px solid rgba(255,77,94,0.35);
+    color: var(--live); font-family: var(--font-mono); font-size: 13px;
+    padding: 10px 16px; border-radius: var(--radius); margin-bottom: 18px;
+  }
+  .banner.show { display: block; }
+
+  /* ---------- Layout ---------- */
+  .grid { display: grid; grid-template-columns: 1fr 320px; gap: 18px; align-items: start; }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+
+  .section-title {
+    font-family: var(--font-display); font-weight: 600; font-size: 13px;
+    color: var(--muted); text-transform: none; letter-spacing: 0.01em;
+    margin: 0 0 12px 2px;
+  }
+
+  /* ---------- Product cards ---------- */
+  .products { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+  @media (max-width: 560px) { .products { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; position: relative; transition: border-color 0.2s;
+  }
+  .card.focused { border-color: var(--tiktok); }
+  .card.soldout { opacity: 0.55; }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .card-title { font-weight: 600; font-size: 15px; line-height: 1.3; }
+  .card-price { color: var(--muted); font-family: var(--font-mono); font-size: 13px; margin-top: 2px; }
+
+  .focus-pill {
+    font-size: 11px; font-family: var(--font-mono); color: var(--tiktok);
+    border: 1px solid var(--tiktok); border-radius: 999px; padding: 3px 8px;
+    background: none; cursor: pointer; white-space: nowrap;
+  }
+  .focus-pill.active { background: var(--tiktok); color: #052420; border-color: var(--tiktok); }
+
+  .stock-row { margin-top: 14px; }
+  .stock-numbers {
+    display: flex; justify-content: space-between; font-family: var(--font-mono);
+    font-size: 13px; margin-bottom: 6px;
+  }
+  .stock-numbers .n { font-size: 20px; font-weight: 700; }
+  .stock-bar-track {
+    height: 7px; border-radius: 4px; background: var(--panel-2); overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .stock-bar-fill { height: 100%; border-radius: 4px; transition: width 0.35s ease; background: var(--ok); }
+  .stock-bar-fill.warn { background: var(--warn); }
+  .stock-bar-fill.danger { background: var(--danger); }
+
+  .soldout-tag {
+    margin-top: 10px; font-family: var(--font-mono); font-size: 12px; color: var(--live);
+    letter-spacing: 0.02em;
+  }
+
+  .sim-row { display: flex; gap: 6px; margin-top: 12px; }
+  .sim-btn {
+    flex: 1; font-size: 11px; font-family: var(--font-mono); border-radius: 6px;
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+    padding: 6px 4px; cursor: pointer; transition: border-color .15s;
+  }
+  .sim-btn:hover:not(:disabled) { border-color: var(--muted); }
+  .sim-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .sim-btn.tt { color: var(--tiktok); }
+  .sim-btn.ig { color: var(--instagram); }
+  .sim-btn.web { color: var(--website); }
+
+  /* ---------- Sidebar ---------- */
+  .panel-box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 18px;
+  }
+  .velocity-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .velocity-row:last-child { margin-bottom: 0; }
+  .ch-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .ch-dot.tt { background: var(--tiktok); }
+  .ch-dot.ig { background: var(--instagram); }
+  .ch-dot.web { background: var(--website); }
+  .velocity-label { font-size: 13px; flex: 1; }
+  .velocity-count { font-family: var(--font-mono); font-weight: 700; font-size: 14px; }
+
+  .comments { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  .comment { font-size: 13px; line-height: 1.4; }
+  .comment .who { font-family: var(--font-mono); font-size: 12px; }
+  .comment .who.tt { color: var(--tiktok); }
+  .comment .who.ig { color: var(--instagram); }
+  .comment .who.web { color: var(--website); }
+  .comment .msg { color: var(--text); }
+
+  .channels-strip {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 4px;
+  }
+  .channel-status { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+
+  .empty-hint { color: var(--muted); font-size: 13px; font-style: normal; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="live-badge"><span class="live-dot"></span>EN VIVO</div>
+      <div>
+        <div class="session-name">Aurora Skincare — Drop de Lanzamiento</div>
+        <div class="session-timer" id="timer">00:00:00</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="theme-toggle" id="themeToggle" title="Cambiar tema">◐</button>
+      <button class="stop-btn" id="stopBtn">■ Detener ventas</button>
+    </div>
+  </div>
+
+  <div class="banner" id="stopBanner">⛔ Ventas detenidas manualmente. Los canales no procesarán nuevas compras hasta reanudar.</div>
+
+  <div class="grid">
+    <div>
+      <div class="section-title">Productos del live — stock exclusivo reservado</div>
+      <div class="products" id="products"></div>
+    </div>
+
+    <div>
+      <div class="panel-box">
+        <div class="section-title" style="margin-bottom:14px;">Velocidad de venta · últimos 60s</div>
+        <div id="velocity"></div>
+      </div>
+
+      <div class="panel-box">
+        <div class="section-title" style="margin-bottom:14px;">Comentarios unificados</div>
+        <div class="comments" id="comments"><div class="empty-hint">Esperando actividad…</div></div>
+      </div>
+
+      <div class="panel-box">
+        <div class="section-title" style="margin-bottom:10px;">Estado de canales</div>
+        <div class="channels-strip">
+          <div class="channel-status"><span class="status-dot" style="background:var(--tiktok)"></span>TikTok</div>
+          <div class="channel-status"><span class="status-dot" style="background:var(--instagram)"></span>Instagram</div>
+          <div class="channel-status"><span class="status-dot" style="background:var(--website)"></span>Sitio web</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  // ---------- Estado (simula lo que en producción vive en Redis + Postgres) ----------
+  const products = [
+    { id: 'p1', title: 'Sérum Vitamina C 30ml', price: 32, reserved: 60, sold: 0, focused: true },
+    { id: 'p2', title: 'Dúo Crema Hidratante', price: 48, reserved: 40, sold: 0, focused: false },
+    { id: 'p3', title: 'Kit Limpieza Facial', price: 25, reserved: 50, sold: 0, focused: false },
+    { id: 'p4', title: 'Mascarilla Recuperadora', price: 19, reserved: 35, sold: 0, focused: false },
+  ];
+
+  const channels = { tiktok: { label: 'TikTok', cls: 'tt', events: [] }, instagram: { label: 'Instagram', cls: 'ig', events: [] }, website: { label: 'Sitio web', cls: 'web' , events: [] } };
+  let salesStopped = false;
+  let startTime = Date.now();
+
+  const commentBank = [
+    ['tt', '@nayeli.k', '¿aún queda del sérum?'],
+    ['ig', '@carla_glow', 'link porfaaa'],
+    ['web', '@invitado', 'agregando al carrito ahora'],
+    ['tt', '@rulo.beauty', 'ese kit se ve increíble'],
+    ['ig', '@marce_29', '¿hacen envíos internacionales?'],
+    ['tt', '@fer.skin', 'compré 2!!'],
+    ['web', '@invitado', '¿código de descuento?'],
+    ['ig', '@vale_orozco', 'la crema es mi favorita'],
+  ];
+
+  // ---------- Lógica atómica anti-overselling (simula el script Lua de Redis) ----------
+  function attemptPurchase(productId, channelKey, qty) {
+    if (salesStopped) return { ok: false, reason: 'stopped' };
+    const p = products.find(x => x.id === productId);
+    if (!p) return { ok: false, reason: 'not_found' };
+    const remaining = p.reserved - p.sold;
+    if (remaining < qty) return { ok: false, reason: 'out_of_stock' };
+
+    // Decremento atómico (JS es single-threaded: no hay condición de carrera real aquí,
+    // pero replica exactamente la semántica del DECRBY + chequeo en Redis)
+    p.sold += qty;
+
+    channels[channelKey].events.push(Date.now());
+    render();
+    maybeAddComment(channelKey, p);
+    return { ok: true, remaining: p.reserved - p.sold };
+  }
+
+  function maybeAddComment(channelKey, product) {
+    if (Math.random() > 0.5) return;
+    const pool = commentBank.filter(c => c[0] === channelKey);
+    const pick = pool[Math.floor(Math.random() * pool.length)] || commentBank[0];
+    addComment(pick[0], pick[1], pick[2]);
+  }
+
+  function addComment(chKey, who, msg) {
+    const box = document.getElementById('comments');
+    const hint = box.querySelector('.empty-hint');
+    if (hint) hint.remove();
+    const el = document.createElement('div');
+    el.className = 'comment';
+    el.innerHTML = `<span class="who ${channels[chKey].cls}">${who} · ${channels[chKey].label}</span><br><span class="msg">${msg}</span>`;
+    box.prepend(el);
+    while (box.children.length > 12) box.removeChild(box.lastChild);
+  }
+
+  // ---------- Render ----------
+  function render() {
+    const wrap = document.getElementById('products');
+    wrap.innerHTML = '';
+    products.forEach(p => {
+      const remaining = p.reserved - p.sold;
+      const pct = Math.max(0, (remaining / p.reserved) * 100);
+      const soldOut = remaining <= 0;
+      let barClass = '';
+      if (pct <= 15) barClass = 'danger'; else if (pct <= 40) barClass = 'warn';
+
+      const card = document.createElement('div');
+      card.className = 'card' + (p.focused ? ' focused' : '') + (soldOut ? ' soldout' : '');
+      card.innerHTML = `
+        <div class="card-top">
+          <div>
+            <div class="card-title">${p.title}</div>
+            <div class="card-price">$${p.price.toFixed(2)}</div>
+          </div>
+          <button class="focus-pill ${p.focused ? 'active' : ''}" data-focus="${p.id}">${p.focused ? 'En foco' : 'Poner en foco'}</button>
+        </div>
+        <div class="stock-row">
+          <div class="stock-numbers">
+            <span class="n">${remaining}</span>
+            <span>de ${p.reserved} reservadas</span>
+          </div>
+          <div class="stock-bar-track"><div class="stock-bar-fill ${barClass}" style="width:${pct}%"></div></div>
+        </div>
+        ${soldOut ? '<div class="soldout-tag">● AGOTADO — retirado de los 3 canales</div>' : ''}
+        <div class="sim-row">
+          <button class="sim-btn tt" data-buy="${p.id}|tiktok" ${soldOut || salesStopped ? 'disabled' : ''}>+1 TikTok</button>
+          <button class="sim-btn ig" data-buy="${p.id}|instagram" ${soldOut || salesStopped ? 'disabled' : ''}>+1 Instagram</button>
+          <button class="sim-btn web" data-buy="${p.id}|website" ${soldOut || salesStopped ? 'disabled' : ''}>+1 Web</button>
+        </div>
+      `;
+      wrap.appendChild(card);
+    });
+
+    // Velocidad de venta (eventos en los últimos 60s)
+    const vel = document.getElementById('velocity');
+    vel.innerHTML = '';
+    const now = Date.now();
+    Object.entries(channels).forEach(([key, ch]) => {
+      ch.events = ch.events.filter(t => now - t < 60000);
+      const count = ch.events.length;
+      const max = 15;
+      const filled = Math.min(8, Math.round((count / max) * 8));
+      const bar = '▓'.repeat(filled) + '░'.repeat(8 - filled);
+      const row = document.createElement('div');
+      row.className = 'velocity-row';
+      row.innerHTML = `<span class="ch-dot ${ch.cls}"></span><span class="velocity-label">${ch.label}</span><span class="velocity-count" style="font-family:var(--font-mono);color:var(--muted)">${bar}</span><span class="velocity-count">${count}</span>`;
+      vel.appendChild(row);
+    });
+
+    // Botón de parar ventas
+    const stopBtn = document.getElementById('stopBtn');
+    stopBtn.textContent = salesStopped ? '▶ Reanudar ventas' : '■ Detener ventas';
+    stopBtn.classList.toggle('stopped', salesStopped);
+    document.getElementById('stopBanner').classList.toggle('show', salesStopped);
+  }
+
+  // ---------- Eventos ----------
+  document.getElementById('products').addEventListener('click', (e) => {
+    const focusId = e.target.getAttribute('data-focus');
+    if (focusId) {
+      products.forEach(p => p.focused = (p.id === focusId));
+      render();
+      return;
+    }
+    const buy = e.target.getAttribute('data-buy');
+    if (buy) {
+      const [pid, ch] = buy.split('|');
+      attemptPurchase(pid, ch, 1);
+    }
+  });
+
+  document.getElementById('stopBtn').addEventListener('click', () => {
+    salesStopped = !salesStopped;
+    render();
+  });
+
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    const root = document.documentElement;
+    const current = root.getAttribute('data-theme');
+    root.setAttribute('data-theme', current === 'light' ? 'dark' : 'light');
+  });
+
+  // Timer de sesión
+  setInterval(() => {
+    const diff = Math.floor((Date.now() - startTime) / 1000);
+    const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+    const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+    const s = String(diff % 60).padStart(2, '0');
+    document.getElementById('timer').textContent = `${h}:${m}:${s}`;
+  }, 1000);
+
+  // Simulador de compras entrantes automáticas (imita webhooks reales llegando)
+  setInterval(() => {
+    if (salesStopped) return;
+    const live = products.filter(p => p.reserved - p.sold > 0);
+    if (live.length === 0) return;
+    const weightedPool = live.flatMap(p => p.focused ? [p, p, p] : [p]); // el producto en foco vende más
+    const p = weightedPool[Math.floor(Math.random() * weightedPool.length)];
+    const chKeys = Object.keys(channels);
+    const ch = chKeys[Math.floor(Math.random() * chKeys.length)];
+    attemptPurchase(p.id, ch, 1);
+  }, 1800);
+
+  render();
+})();
+</script>
+</body>
+</html>
