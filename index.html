@@ -276,11 +276,27 @@
   async function fetchState() {
     try {
       const res = await fetch('/api/state');
-      state = await res.json();
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        showConnectionError(data.error || 'Error desconocido');
+        return;
+      }
+      state = data;
       render();
     } catch (e) {
-      console.error('No se pudo sincronizar con el servidor', e);
+      showConnectionError('No se pudo contactar al servidor.');
     }
+  }
+
+  function showConnectionError(message) {
+    const wrap = document.getElementById('products');
+    wrap.innerHTML = `
+      <div style="grid-column: 1 / -1; background:#fdecec; border:1px solid #f3b9b9; border-radius:10px; padding:18px; color:#7a1f1f; font-size:13.5px; line-height:1.5;">
+        <strong>No se pudo cargar el inventario real.</strong><br>
+        Detalle: ${message}<br><br>
+        Revisa en Vercel → tu proyecto → pestaña "Storage" que la base de datos Upstash esté conectada, y luego ve a "Deployments" → botón "Redeploy" en el más reciente.
+      </div>
+    `;
   }
 
   async function buy(productId, channel, btn) {
