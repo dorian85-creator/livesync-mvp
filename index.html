@@ -241,22 +241,19 @@
 
     <div>
       <div class="panel-box">
-        <div class="section-title" style="margin-bottom:14px;">Velocidad de venta · últimos 60s</div>
-        <div id="velocity"></div>
-      </div>
-
-      <div class="panel-box">
-        <div class="section-title" style="margin-bottom:14px;">Comentarios unificados</div>
-        <div class="comments" id="comments"><div class="empty-hint">Esperando actividad…</div></div>
-      </div>
-
-      <div class="panel-box">
         <div class="section-title" style="margin-bottom:10px;">Estado de canales</div>
         <div class="channels-strip">
           <div class="channel-status"><span class="status-dot" style="background:var(--tiktok)"></span>TikTok</div>
           <div class="channel-status"><span class="status-dot" style="background:var(--instagram)"></span>Instagram</div>
           <div class="channel-status"><span class="status-dot" style="background:var(--website)"></span>Sitio web</div>
         </div>
+      </div>
+
+      <div class="panel-box">
+        <div class="section-title" style="margin-bottom:10px;">Sincronización</div>
+        <p style="font-size:13px; color:var(--muted); line-height:1.5; margin:0;">
+          El stock que ves aquí es real y compartido: cualquier persona que abra este mismo link ve exactamente los mismos números, actualizados cada pocos segundos.
+        </p>
       </div>
     </div>
   </div>
@@ -265,161 +262,128 @@
 
 <script>
 (function () {
-  const products = [
-    { id: 'p1', title: 'Sérum Vitamina C 30ml', price: 32, reserved: 60, sold: 0, focused: true },
-    { id: 'p2', title: 'Dúo Crema Hidratante', price: 48, reserved: 40, sold: 0, focused: false },
-    { id: 'p3', title: 'Kit Limpieza Facial', price: 25, reserved: 50, sold: 0, focused: false },
-    { id: 'p4', title: 'Mascarilla Recuperadora', price: 19, reserved: 35, sold: 0, focused: false },
-  ];
-
-  const channels = {
-    tiktok: { label: 'TikTok', cls: 'tt', events: [] },
-    instagram: { label: 'Instagram', cls: 'ig', events: [] },
-    website: { label: 'Sitio web', cls: 'web', events: [] },
+  const PRODUCTS_META = {
+    p1: { title: 'Sérum Vitamina C 30ml', price: 32, reserved: 60 },
+    p2: { title: 'Dúo Crema Hidratante', price: 48, reserved: 40 },
+    p3: { title: 'Kit Limpieza Facial', price: 25, reserved: 50 },
+    p4: { title: 'Mascarilla Recuperadora', price: 19, reserved: 35 },
   };
-  let salesStopped = false;
-  let startTime = Date.now();
+  const PRODUCT_IDS = Object.keys(PRODUCTS_META);
 
-  const commentBank = [
-    ['tt', '@nayeli.k', '¿aún queda del sérum?'],
-    ['ig', '@carla_glow', 'link porfaaa'],
-    ['web', '@invitado', 'agregando al carrito ahora'],
-    ['tt', '@rulo.beauty', 'ese kit se ve increíble'],
-    ['ig', '@marce_29', '¿hacen envíos internacionales?'],
-    ['tt', '@fer.skin', 'compré 2!!'],
-    ['web', '@invitado', '¿código de descuento?'],
-    ['ig', '@vale_orozco', 'la crema es mi favorita'],
-  ];
+  let state = { stocks: {}, counts: {}, stopped: false, focus: 'p1', startedAt: Date.now() };
+  const busy = {};
 
-  function attemptPurchase(productId, channelKey, qty) {
-    if (salesStopped) return { ok: false, reason: 'stopped' };
-    const p = products.find(x => x.id === productId);
-    if (!p) return { ok: false, reason: 'not_found' };
-    const remaining = p.reserved - p.sold;
-    if (remaining < qty) return { ok: false, reason: 'out_of_stock' };
-
-    p.sold += qty;
-    channels[channelKey].events.push(Date.now());
-    render();
-    maybeAddComment(channelKey);
-    return { ok: true, remaining: p.reserved - p.sold };
+  async function fetchState() {
+    try {
+      const res = await fetch('/api/state');
+      state = await res.json();
+      render();
+    } catch (e) {
+      console.error('No se pudo sincronizar con el servidor', e);
+    }
   }
 
-  function maybeAddComment(channelKey) {
-    if (Math.random() > 0.5) return;
-    const pool = commentBank.filter(c => c[0] === channelKey);
-    const pick = pool[Math.floor(Math.random() * pool.length)] || commentBank[0];
-    addComment(pick[0], pick[1], pick[2]);
+  async function buy(productId, channel, btn) {
+    const key = productId + channel;
+    if (busy[key]) return;
+    busy[key] = true;
+    if (btn) btn.disabled = true;
+    try {
+      await fetch('/api/purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId, channel }),
+      });
+      await fetchState();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      busy[key] = false;
+    }
   }
 
-  function addComment(chKey, who, msg) {
-    const box = document.getElementById('comments');
-    const hint = box.querySelector('.empty-hint');
-    if (hint) hint.remove();
-    const el = document.createElement('div');
-    el.className = 'comment';
-    el.innerHTML = `<span class="who ${channels[chKey].cls}">${who} · ${channels[chKey].label}</span><br><span class="msg">${msg}</span>`;
-    box.prepend(el);
-    while (box.children.length > 12) box.removeChild(box.lastChild);
+  async function toggleStop() {
+    await fetch('/api/toggle-stop', { method: 'POST' });
+    await fetchState();
+  }
+
+  async function setFocus(productId) {
+    await fetch('/api/set-focus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productId }),
+    });
+    await fetchState();
   }
 
   function render() {
     const wrap = document.getElementById('products');
     wrap.innerHTML = '';
-    products.forEach(p => {
-      const remaining = p.reserved - p.sold;
-      const pct = Math.max(0, (remaining / p.reserved) * 100);
+    PRODUCT_IDS.forEach((id) => {
+      const meta = PRODUCTS_META[id];
+      const remaining = state.stocks[id] ?? meta.reserved;
+      const pct = Math.max(0, (remaining / meta.reserved) * 100);
       const soldOut = remaining <= 0;
+      const focused = state.focus === id;
       let barClass = '';
       if (pct <= 15) barClass = 'danger'; else if (pct <= 40) barClass = 'warn';
+      const c = (state.counts && state.counts[id]) || { tiktok: 0, instagram: 0, website: 0 };
 
       const card = document.createElement('div');
-      card.className = 'card' + (p.focused ? ' focused' : '') + (soldOut ? ' soldout' : '');
+      card.className = 'card' + (focused ? ' focused' : '') + (soldOut ? ' soldout' : '');
       card.innerHTML = `
         <div class="card-top">
           <div>
-            <div class="card-title">${p.title}</div>
-            <div class="card-price">$${p.price.toFixed(2)}</div>
+            <div class="card-title">${meta.title}</div>
+            <div class="card-price">$${meta.price.toFixed(2)}</div>
           </div>
-          <button class="focus-pill ${p.focused ? 'active' : ''}" data-focus="${p.id}">${p.focused ? 'En foco' : 'Poner en foco'}</button>
+          <button class="focus-pill ${focused ? 'active' : ''}" data-focus="${id}">${focused ? 'En foco' : 'Poner en foco'}</button>
         </div>
         <div class="stock-row">
           <div class="stock-numbers">
             <span class="n">${remaining}</span>
-            <span class="of">de ${p.reserved} reservadas</span>
+            <span class="of">de ${meta.reserved} reservadas</span>
           </div>
           <div class="stock-bar-track"><div class="stock-bar-fill ${barClass}" style="width:${pct}%"></div></div>
         </div>
         ${soldOut ? '<div class="soldout-tag">● AGOTADO — retirado de los 3 canales</div>' : ''}
         <div class="sim-row">
-          <button class="sim-btn tt" data-buy="${p.id}|tiktok" ${soldOut || salesStopped ? 'disabled' : ''}>+1 TikTok</button>
-          <button class="sim-btn ig" data-buy="${p.id}|instagram" ${soldOut || salesStopped ? 'disabled' : ''}>+1 Instagram</button>
-          <button class="sim-btn web" data-buy="${p.id}|website" ${soldOut || salesStopped ? 'disabled' : ''}>+1 Web</button>
+          <button class="sim-btn tt" data-buy="${id}|tiktok" ${soldOut || state.stopped ? 'disabled' : ''}>+1 TikTok · ${c.tiktok}</button>
+          <button class="sim-btn ig" data-buy="${id}|instagram" ${soldOut || state.stopped ? 'disabled' : ''}>+1 Instagram · ${c.instagram}</button>
+          <button class="sim-btn web" data-buy="${id}|website" ${soldOut || state.stopped ? 'disabled' : ''}>+1 Web · ${c.website}</button>
         </div>
       `;
       wrap.appendChild(card);
     });
 
-    const vel = document.getElementById('velocity');
-    vel.innerHTML = '';
-    const now = Date.now();
-    Object.entries(channels).forEach(([key, ch]) => {
-      ch.events = ch.events.filter(t => now - t < 60000);
-      const count = ch.events.length;
-      const max = 15;
-      const filled = Math.min(8, Math.round((count / max) * 8));
-      const bar = '▓'.repeat(filled) + '░'.repeat(8 - filled);
-      const row = document.createElement('div');
-      row.className = 'velocity-row';
-      row.innerHTML = `<span class="ch-dot ${ch.cls}"></span><span class="velocity-label">${ch.label}</span><span class="velocity-bar">${bar}</span><span class="velocity-count">${count}</span>`;
-      vel.appendChild(row);
-    });
-
     const stopBtn = document.getElementById('stopBtn');
-    stopBtn.textContent = salesStopped ? '▶ Reanudar ventas' : '■ Detener ventas';
-    stopBtn.classList.toggle('stopped', salesStopped);
-    document.getElementById('stopBanner').classList.toggle('show', salesStopped);
+    stopBtn.textContent = state.stopped ? '▶ Reanudar ventas' : '■ Detener ventas';
+    stopBtn.classList.toggle('stopped', state.stopped);
+    document.getElementById('stopBanner').classList.toggle('show', state.stopped);
   }
 
   document.getElementById('products').addEventListener('click', (e) => {
     const focusId = e.target.getAttribute('data-focus');
-    if (focusId) {
-      products.forEach(p => p.focused = (p.id === focusId));
-      render();
-      return;
-    }
-    const buy = e.target.getAttribute('data-buy');
-    if (buy) {
-      const [pid, ch] = buy.split('|');
-      attemptPurchase(pid, ch, 1);
+    if (focusId) { setFocus(focusId); return; }
+    const buyAttr = e.target.getAttribute('data-buy');
+    if (buyAttr) {
+      const [pid, ch] = buyAttr.split('|');
+      buy(pid, ch, e.target);
     }
   });
 
-  document.getElementById('stopBtn').addEventListener('click', () => {
-    salesStopped = !salesStopped;
-    render();
-  });
+  document.getElementById('stopBtn').addEventListener('click', toggleStop);
 
   setInterval(() => {
-    const diff = Math.floor((Date.now() - startTime) / 1000);
+    const diff = Math.floor((Date.now() - state.startedAt) / 1000);
     const h = String(Math.floor(diff / 3600)).padStart(2, '0');
     const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
     const s = String(diff % 60).padStart(2, '0');
     document.getElementById('timer').textContent = `${h}:${m}:${s}`;
   }, 1000);
 
-  setInterval(() => {
-    if (salesStopped) return;
-    const live = products.filter(p => p.reserved - p.sold > 0);
-    if (live.length === 0) return;
-    const weightedPool = live.flatMap(p => p.focused ? [p, p, p] : [p]);
-    const p = weightedPool[Math.floor(Math.random() * weightedPool.length)];
-    const chKeys = Object.keys(channels);
-    const ch = chKeys[Math.floor(Math.random() * chKeys.length)];
-    attemptPurchase(p.id, ch, 1);
-  }, 1800);
-
-  render();
+  fetchState();
+  setInterval(fetchState, 2500); // mantiene sincronizados a todos los que estén viendo el panel
 })();
 </script>
 </body>
